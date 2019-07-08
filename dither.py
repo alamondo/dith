@@ -6,12 +6,19 @@ import scipy.spatial as sp
 
 
 gb_palette = [[15, 56, 15], [48, 98, 48], [139, 172, 15], [155, 188, 15]]
+
 c64_palette = [[0, 0, 0	], [255, 255, 255], [136, 0, 0], [170, 255, 238], [204, 68, 204], [0, 204, 85], [0, 0, 170],
                [238, 238, 119], [221, 136, 85], [102, 68, 0], [255, 119, 119], [51, 51, 51], [119, 119, 119],
                [170, 255, 102], [0, 136, 255], [187, 187, 187]]
 
 
 def get_nearest_web_safe_color(rgb_color):
+
+    """
+
+    :param rgb_color:  rgb color triplet (0-255)
+    :return: rgb color triplet (0-255) from web safe color palette nearest to input color
+    """
 
     r = int(round((rgb_color[0] / 255.0) * 5) * 51)
     g = int(round((rgb_color[1] / 255.0) * 5) * 51)
@@ -20,7 +27,6 @@ def get_nearest_web_safe_color(rgb_color):
     if r > 255:
         r = 255
     if g > 255:
-
         g = 255
     if b > 255:
         b = 255
@@ -30,19 +36,57 @@ def get_nearest_web_safe_color(rgb_color):
 
 def get_nearest_color_from_palette(rgb_color, palette):
 
-    tree = sp.KDTree(palette)  # creating k-d tree from web-save colors
-    distance, result = tree.query(rgb_color)  # get Euclidean distance and index of web-save color in tree/list
+    """
 
-    return palette[result]
+    :param rgb_color: rgb color triplet (0-255)
+    :param palette: color palette, list of rgb color triplets (0-255)
+    :return: rgb color triplet (0-255) from color palette nearest to input color
+    """
+
+    tree = sp.KDTree(palette)
+
+    return palette[tree.query(rgb_color)[1]]
 
 
-def ordered_dithering_color(image_array, palette="WEB"):
+def ordered_dithering_color(image_array, palette="WEB", matrix=None):
 
-    bayer_matrix = np.array([[0, 8, 2, 10],
-                            [12, 4, 14, 6],
-                            [3, 11, 1, 9],
-                            [15, 7, 13, 5]])
-    matrix = bayer_matrix / 16
+    """
+
+    :param image_array: np array size: width x height x 3 (0-255)
+    :param palette: color palette, list of rgb color triplets (0-255)
+    :param matrix: ordered dithering matrix only BAYER and HALFTONE supported
+    :return: dithered np array
+    """
+    if matrix is not None:
+        if matrix == "BAYER":
+            bayer_matrix = np.array([[0, 8, 2, 10],
+                                     [12, 4, 14, 6],
+                                     [3, 11, 1, 9],
+                                     [15, 7, 13, 5]])
+            temp_matrix = bayer_matrix / 16
+        elif matrix == "HALFTONE":
+            halftone_matrix = np.array([[0, 0, 1, 1, 1, 1, 0, 0],
+                                        [0, 1, 2, 2, 2, 2, 1, 0],
+                                        [1, 2, 2, 3, 3, 2, 2, 1],
+                                        [1, 2, 3, 4, 4, 3, 2, 1],
+                                        [1, 2, 3, 4, 4, 3, 2, 1],
+                                        [1, 2, 2, 3, 3, 2, 2, 1],
+                                        [0, 1, 2, 2, 2, 2, 1, 0],
+                                        [0, 0, 1, 1, 1, 1, 0, 0]
+                                        ])
+            temp_matrix = halftone_matrix / 5
+        elif type(matrix) == 'string':
+            return -1
+        else:
+            temp_matrix = matrix
+    else:
+        bayer_matrix = np.array([[0, 8, 2, 10],
+                                 [12, 4, 14, 6],
+                                 [3, 11, 1, 9],
+                                 [15, 7, 13, 5]])
+        temp_matrix = bayer_matrix / 16
+
+    matrix = temp_matrix
 
     threshold = np.array([255 / 4, 255 / 4, 255 / 4])
 
@@ -95,6 +139,8 @@ def ordered_dithering_bw(image_array, matrix=None):
                                        [0, 0, 1, 1, 1, 1, 0, 0]
                                         ])
             temp_matrix = halftone_matrix / 5 * 255
+        elif type(matrix) == 'string':
+            return -1
         else:
             temp_matrix = matrix
     else:
@@ -192,3 +238,29 @@ def error_diffusion_bw(image_array, algo="FLOYDSTEINBERG"):
 
     else:
         return image_array
+
+
+def ordered_dithering(image, palette="WEB", matrix=None, color='RGB'):
+
+    if color=='bw':
+        image = image.convert("L")
+
+    img_array = np.array(image)
+
+    if len(img_array.shape) == 3:
+        img_array = ordered_dithering_color(img_array, palette=palette, matrix=matrix)
+    else:
+        img_array = ordered_dithering_bw(img_array, matrix=matrix)
+
+    return Image.fromarray(np.uint8(img_array))
+
+
+def error_diffusion(image, algo="FLOYDSTEINBERG"):
+    img_array = np.array(image)
+
+    if len(img_array.shape) == 3:
+        print(None)
+    else:
+        img_array = error_diffusion_bw(img_array, algo=algo)
+
+    return Image.fromarray(np.uint8(img_array))
