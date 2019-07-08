@@ -11,7 +11,7 @@ size = 1024
 
 f.thumbnail((size, size), Image.ANTIALIAS)
 f = np.array(f)
-f = dit.ordered_dithering_color(f, dit.c64_palette)
+f = dit.ordered_dithering_color(f)
 
 fig = plt.figure(figsize=(18, 9))
 
