@@ -1,5 +1,4 @@
-from PIL import Image, ImageOps
-import matplotlib.pyplot as plt
+from PIL import Image
 import numpy as np
 from random import randrange
 import scipy.spatial as sp
@@ -10,6 +9,18 @@ gb_palette = [[15, 56, 15], [48, 98, 48], [139, 172, 15], [155, 188, 15]]
 c64_palette = [[0, 0, 0	], [255, 255, 255], [136, 0, 0], [170, 255, 238], [204, 68, 204], [0, 204, 85], [0, 0, 170],
                [238, 238, 119], [221, 136, 85], [102, 68, 0], [255, 119, 119], [51, 51, 51], [119, 119, 119],
                [170, 255, 102], [0, 136, 255], [187, 187, 187]]
+
+
+def get_palette(photo, colors):
+
+    new_photo = photo.convert("RGB").quantize(colors=colors)
+    new_palette = []
+    palette = new_photo.convert('RGB').getcolors()
+
+    for each in palette:
+        new_palette.append(each[1])
+
+    return new_palette
 
 
 def get_nearest_web_safe_color(rgb_color):
@@ -34,7 +45,7 @@ def get_nearest_web_safe_color(rgb_color):
     return r, g, b
 
 
-def get_nearest_color_from_palette(rgb_color, palette):
+def get_nearest_color_from_palette(rgb_color, palette='WEB'):
 
     """
 
@@ -42,10 +53,11 @@ def get_nearest_color_from_palette(rgb_color, palette):
     :param palette: color palette, list of rgb color triplets (0-255)
     :return: rgb color triplet (0-255) from color palette nearest to input color
     """
-
-    tree = sp.KDTree(palette)
-
-    return palette[tree.query(rgb_color)[1]]
+    if palette == "WEB":
+        return get_nearest_web_safe_color(rgb_color)
+    else:
+        tree = sp.KDTree(palette)
+        return palette[tree.query(rgb_color)[1]]
 
 
 def ordered_dithering_color(image_array, palette="WEB", matrix=None):
@@ -53,9 +65,9 @@ def ordered_dithering_color(image_array, palette="WEB", matrix=None):
     """
 
     :param image_array: np array size: width x height x 3 (0-255)
-    :param palette: color palette, list of rgb color triplets (0-255)
-    :param matrix: ordered dithering matrix only BAYER and HALFTONE supported
-    :return: dithered np array
+    :param palette: Color palette, list of rgb color triplets (0-255).
+    :param matrix: Ordered dithering matrix. Only BAYER and HALFTONE supported.
+    :return: Dithered np array.
     """
     if matrix is not None:
         if matrix == "BAYER":
@@ -97,13 +109,9 @@ def ordered_dithering_color(image_array, palette="WEB", matrix=None):
                     if i * matrix.shape[0] + ii < image_array.shape[0] \
                             and j * matrix.shape[1] + jj < image_array.shape[1]:
                         temp = image_array[i * matrix.shape[0] + ii, j * matrix.shape[1] + jj, :] + \
-                               (np.array([matrix[ii, jj], matrix[ii, jj], matrix[ii, jj]]) * threshold)
-                        if palette == "WEB":
-                            image_array[i * matrix.shape[0] + ii, j * matrix.shape[1] + jj, :] = \
-                                get_nearest_web_safe_color(temp)
-                        else:
-                            image_array[i * matrix.shape[0] + ii, j * matrix.shape[1] + jj, :] = \
-                                get_nearest_color_from_palette(temp, palette)
+                            (np.array([matrix[ii, jj], matrix[ii, jj], matrix[ii, jj]]) * threshold)
+                        image_array[i * matrix.shape[0] + ii, j * matrix.shape[1] + jj, :] = \
+                            get_nearest_color_from_palette(temp, palette)
 
     return image_array
 
@@ -112,10 +120,7 @@ def no_dither_color(image_array, palette="WEB"):
 
     for y in range(image_array.shape[0]):
         for x in range(image_array.shape[1]):
-            if palette == "WEB":
-                image_array[y, x, :] = get_nearest_web_safe_color(image_array[y, x, :])
-            else:
-                image_array[y, x, :] = get_nearest_color_from_palette(image_array[y, x, :], palette)
+            image_array[y, x, :] = get_nearest_color_from_palette(image_array[y, x, :], palette)
 
     return image_array
 
@@ -181,25 +186,6 @@ def threshold_bw(image_array, thresh=128, random=False):
 
 def error_diffusion_bw(image_array, algo="FLOYDSTEINBERG"):
 
-    if algo == "NORM":
-        image_array = np.float32(image_array.copy())
-        image_array *= 1 / 256
-        distribution = np.array([7, 3, 5, 1], dtype=float) / 16
-        u = np.array([0, 1, 1, 1])
-
-        v = np.array([1, -1, 0, 1])
-
-        for y in range(image_array.shape[0] - 1):
-            for x in range(image_array.shape[1] - 1):
-                value = np.round(image_array[y, x])
-                error = image_array[y, x] - value
-                image_array[y, x] = value
-                image_array[y + u, x + v] += error * distribution
-
-        image_array[:, -1] = 1
-        image_array[-1, :] = 1
-        return image_array
-
     if algo == "FLOYDSTEINBERG":
         image_array = np.float32(image_array.copy())
         image_array *= 1/256
@@ -240,13 +226,57 @@ def error_diffusion_bw(image_array, algo="FLOYDSTEINBERG"):
         return image_array
 
 
-def ordered_dithering(image, palette="WEB", matrix=None, color='RGB'):
+def error_diffusion_color(image_array, algo="FLOYDSTEINBERG", palette="WEB"):
 
-    if color=='bw':
+    if algo == "FLOYDSTEINBERG":
+        image_array = np.float32(image_array.copy())
+        distribution = np.array([7, 3, 5, 1], dtype=float) / 16
+        u = np.array([0, 1, 1, 1])
+        v = np.array([1, -1, 0, 1])
+
+        for y in range(image_array.shape[0] - 1):
+            for x in range(image_array.shape[1] - 1):
+                value = get_nearest_color_from_palette(image_array[y, x], palette)
+                error = image_array[y, x] - value
+                image_array[y, x] = value
+                image_array[y + u, x + v, :] += error * distribution.reshape(4, 1)
+
+        image_array[:, -1] = 1
+        image_array[-1, :] = 1
+        return image_array
+
+    elif algo == "JJN":
+        image_array = np.float32(image_array.copy())
+        distribution = np.array([7, 5, 3, 5, 7, 5, 3, 1, 3, 5, 3, 1], dtype=float) / 48
+        u = np.array([0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2])
+        v = np.array([1, 2, -2, -1, 0, 1, 2, -2, -1, 0, 1, 2])
+
+        for y in range(image_array.shape[0] - 2):
+            for x in range(image_array.shape[1] - 2):
+                value = get_nearest_color_from_palette(image_array[y, x], palette)
+                error = image_array[y, x] - value
+                image_array[y, x] = value
+                image_array[y + u, x + v] += error * distribution.reshape(12, 1)
+
+        image_array[:, -1] = 1
+        image_array[-1, :] = 1
+        return image_array
+
+    else:
+        return image_array
+
+
+def ordered_dithering(image, palette="WEB", matrix=None, color='RGB', colors=8):
+
+    if palette == "ADAPTIVE":
+        palette = get_palette(image, colors)
+
+    if color == 'BW':
         image = image.convert("L")
 
     img_array = np.array(image)
 
+    print(palette)
     if len(img_array.shape) == 3:
         img_array = ordered_dithering_color(img_array, palette=palette, matrix=matrix)
     else:
@@ -255,12 +285,52 @@ def ordered_dithering(image, palette="WEB", matrix=None, color='RGB'):
     return Image.fromarray(np.uint8(img_array))
 
 
-def error_diffusion(image, algo="FLOYDSTEINBERG"):
+def error_diffusion(image, algo="FLOYDSTEINBERG", color="RGB", palette="WEB", colors=8):
+
     img_array = np.array(image)
 
-    if len(img_array.shape) == 3:
-        print(None)
-    else:
+    if palette == "ADAPTIVE":
+        palette = get_palette(image, colors)
+
+    if len(img_array.shape) == 3 and color == "BW":
+        image = image.convert("L")
+        img_array = np.array(image)
         img_array = error_diffusion_bw(img_array, algo=algo)
+    elif len(img_array.shape) == 2:
+        img_array = error_diffusion_bw(img_array, algo=algo)
+    elif len(img_array.shape) == 3 and color == "RGB":
+        img_array = error_diffusion_color(img_array, palette=palette, algo=algo)
 
     return Image.fromarray(np.uint8(img_array))
+
+
+def open_image(filename, size=None, conversion="RGB"):
+
+    photo = Image.open(filename)
+
+    if size is None:
+        size = photo.size
+    else:
+        size = [size, size]
+
+    photo.thumbnail(size, Image.ANTIALIAS)
+
+    if conversion == "RGB":
+        photo = photo.convert("RGB")
+    elif conversion == "BW":
+        photo = photo.convert("L")
+    elif type(conversion) == int:
+        photo = photo.convert("RGB").quantize(colors=conversion)
+        photo = photo.convert("RGB")
+
+    else:
+        photo = photo.convert("RGB")
+
+    return photo
+
+
+def upscale(image, scale):
+
+    new_image = image.resize(np.array(image.size)*scale)
+
+    return new_image
