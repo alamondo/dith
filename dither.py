@@ -10,6 +10,11 @@ c64_palette = [[0, 0, 0	], [255, 255, 255], [136, 0, 0], [170, 255, 238], [204, 
                [238, 238, 119], [221, 136, 85], [102, 68, 0], [255, 119, 119], [51, 51, 51], [119, 119, 119],
                [170, 255, 102], [0, 136, 255], [187, 187, 187]]
 
+grayscale_2bit = [[0, 0, 0], [64, 64, 64], [128, 128, 128], [192, 192, 192], [255, 255, 255]]
+
+RGB_3bit = [[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255],
+            [255, 255, 255], [255, 255, 0], [255, 0, 255], [0, 255, 255]]
+
 
 def get_palette(photo, colors):
 
@@ -116,13 +121,20 @@ def ordered_dithering_color(image_array, palette="WEB", matrix=None):
     return image_array
 
 
-def no_dither_color(image_array, palette="WEB"):
+def no_dither_color(image, palette="WEB"):
+
+    image_array = np.array(image)
 
     for y in range(image_array.shape[0]):
         for x in range(image_array.shape[1]):
             image_array[y, x, :] = get_nearest_color_from_palette(image_array[y, x, :], palette)
 
-    return image_array
+    return Image.fromarray(np.uint8(image_array)).convert("RGB")
+
+
+def undither(image):
+
+    return None
 
 
 def ordered_dithering_bw(image_array, matrix=None):
@@ -282,7 +294,7 @@ def ordered_dithering(image, palette="WEB", matrix=None, color='RGB', colors=8):
     else:
         img_array = ordered_dithering_bw(img_array, matrix=matrix)
 
-    return Image.fromarray(np.uint8(img_array))
+    return Image.fromarray(np.uint8(img_array*255))
 
 
 def error_diffusion(image, algo="FLOYDSTEINBERG", color="RGB", palette="WEB", colors=8):
@@ -301,7 +313,7 @@ def error_diffusion(image, algo="FLOYDSTEINBERG", color="RGB", palette="WEB", co
     elif len(img_array.shape) == 3 and color == "RGB":
         img_array = error_diffusion_color(img_array, palette=palette, algo=algo)
 
-    return Image.fromarray(np.uint8(img_array))
+    return Image.fromarray(np.uint8(img_array)).convert("RGB")
 
 
 def open_image(filename, size=None, conversion="RGB"):
